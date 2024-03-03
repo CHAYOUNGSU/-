@@ -1,0 +1,60 @@
+import cv2
+import pytesseract
+
+# Tesseract 실행 파일 경로 설정 (설치 환경에 따라 경로가 다를 수 있습니다.)
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+def detect_numbers(image, min_contour_area=80, min_aspect_ratio=0.2, max_aspect_ratio=1.0):
+    # 숫자 인식을 위해 이미지를 그레이스케일로 변환합니다.
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # 이진화를 적용하여 숫자를 강조합니다.
+    _, thresh = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY_INV)
+
+    # 윤곽선을 찾습니다.
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # 인식된 숫자를 저장할 리스트를 초기화합니다.
+    detected_numbers = []
+
+    # 윤곽선을 순회하며 숫자를 인식합니다.
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        x, y, w, h = cv2.boundingRect(contour)
+        aspect_ratio = float(w) / h
+
+        if area > min_contour_area and min_aspect_ratio < aspect_ratio < max_aspect_ratio:
+            # 인식 영역에 대한 이미지를 추출합니다.
+            roi = thresh[y:y+h, x:x+w]
+            # Tesseract OCR로 숫자를 인식합니다.
+            text = pytesseract.image_to_string(roi, config='--psm 8 digits')
+            # 인식된 숫자를 리스트에 추가합니다.
+            detected_numbers.append((text.strip(), (x, y - 10)))  # 숫자와 좌표를 튜플로 저장합니다.
+
+    return detected_numbers
+
+# 웹캠 비디오를 엽니다.
+cap = cv2.VideoCapture(0)
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    # 이미지에서 숫자를 인식합니다.
+    numbers = detect_numbers(frame)
+
+    # 인식된 숫자를 화면에 표시합니다.
+    for number, position in numbers:
+        cv2.putText(frame, number, position, cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+    # 화면에 프레임을 표시합니다.
+    cv2.imshow('Number Detection', frame)
+
+    # 'q'를 눌러 루프에서 나갑니다.
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# 자원을 해제합니다.
+cap.release()
+cv2.destroyAllWindows()
